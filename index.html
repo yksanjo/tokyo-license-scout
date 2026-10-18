@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tokyo License Scout - an IP scouting game</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #101018;
+    color: #eceaf4;
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  header {
+    width: 100%; max-width: 860px; padding: 16px 20px 8px;
+    display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;
+  }
+  h1 { font-size: 1.4rem; letter-spacing: 1px; }
+  h1 .accent { color: #ff4d6d; }
+  #hud { font-size: 0.92rem; color: #9ad; display: flex; gap: 16px; flex-wrap: wrap; }
+  #hud b { color: #ffd166; }
+  main { width: 100%; max-width: 860px; padding: 8px 20px 40px; }
+  .panel {
+    background: #181828; border: 1px solid #2c2c4c; border-radius: 14px; padding: 20px; margin-top: 12px;
+  }
+  #grid {
+    display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px;
+    margin: 14px auto 0; max-width: 560px; user-select: none;
+  }
+  .tile {
+    aspect-ratio: 1; border-radius: 8px; background: #20203a;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(14px, 3.4vw, 26px); position: relative;
+    border: 1px solid #2c2c4c; transition: transform 0.1s, border-color 0.1s;
+  }
+  .tile.hidden { background: #15152a; color: #3a3a5f; }
+  .tile.reach { cursor: pointer; border-color: #ffd166; box-shadow: 0 0 8px rgba(255,209,102,0.35); }
+  .tile.reach:hover { transform: scale(1.08); }
+  .tile .mark {
+    position: absolute; top: 2px; right: 4px; font-size: 0.6em;
+  }
+  .tile.you { outline: 3px solid #00e5ff; }
+  .tile.rival-here { outline: 3px solid #ff4d6d; }
+  #log {
+    margin-top: 12px; max-height: 120px; overflow-y: auto;
+    font-size: 0.85rem; color: #b8b8d8; line-height: 1.5;
+  }
+  #log div { padding: 2px 0; border-bottom: 1px dashed #232344; }
+  #modal-bg {
+    display: none; position: fixed; inset: 0; background: rgba(5,5,15,0.75);
+    align-items: center; justify-content: center; z-index: 10; padding: 16px;
+  }
+  #modal-bg.show { display: flex; }
+  #modal {
+    background: #1c1c30; border: 1px solid #ffd166; border-radius: 16px;
+    padding: 24px; max-width: 440px; width: 100%;
+  }
+  #modal h2 { font-size: 1.2rem; margin-bottom: 4px; }
+  #modal .cat { color: #9ad; font-size: 0.85rem; margin-bottom: 10px; }
+  #modal .desc { color: #b8b8d8; font-size: 0.9rem; line-height: 1.5; margin-bottom: 12px; }
+  #modal .ask { color: #ffd166; font-size: 0.95rem; margin-bottom: 14px; }
+  .offer-btn {
+    display: block; width: 100%; text-align: left; margin-top: 8px;
+    background: #25254a; color: #eceaf4; border: 1px solid #3a3a6a; border-radius: 10px;
+    padding: 11px 14px; cursor: pointer; font-size: 0.9rem;
+  }
+  .offer-btn:hover { border-color: #ff4d6d; }
+  .offer-btn b { color: #00e5ff; }
+  .offer-btn small { display: block; color: #9a9ac0; margin-top: 2px; }
+  button.big {
+    background: linear-gradient(90deg,#ff4d6d,#ff8f5f); color: #fff; border: none;
+    padding: 13px 34px; font-size: 1.05rem; border-radius: 30px; cursor: pointer;
+    margin-top: 16px; font-weight: 700;
+  }
+  button.big:hover { filter: brightness(1.15); }
+  #start-screen, #end-screen { text-align: center; }
+  #end-screen .rank { font-size: 1.8rem; color: #00e5ff; margin: 10px 0; }
+  .rules { text-align: left; margin: 14px auto 0; max-width: 560px; font-size: 0.9rem; color: #b8b8d8; line-height: 1.6; }
+  footer { color: #55557a; font-size: 0.75rem; padding: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗼 TOKYO LICENSE <span class="accent">SCOUT</span></h1>
+  <div id="hud">
+    <span>Day <b id="day">-</b>/16</span>
+    <span>Your catalog <b id="my-score">0</b></span>
+    <span>Rival catalog <b id="rival-score">0</b></span>
+  </div>
+</header>
+<main>
+  <div id="start-screen" class="panel">
+    <h2>Small Japanese IP owners are the opportunity.</h2>
+    <div class="rules">
+      <p>You are scouting the backstreets of <b>Nekomachi</b>, a fictional Tokyo neighborhood, for small IP owners who need a US licensing partner. A rival agency is working the same streets.</p>
+      <p style="margin-top:8px">Move one block per day by clicking a glowing tile. Find the six owners hidden in the grid. When you find one, make an offer: lowball and they may walk, offer fair and they usually sign, go generous and they always sign but your margin shrinks. The rival signs anyone they reach first. Sixteen days. Build the best catalog.</p>
+    </div>
+    <button class="big" id="start-btn">Hit the streets</button>
+  </div>
+
+  <div id="game-screen" style="display:none">
+    <div id="grid"></div>
+    <div id="log" class="panel"></div>
+  </div>
+
+  <div id="end-screen" class="panel" style="display:none">
+    <h2>Sixteen days on the street</h2>
+    <div class="rank" id="rank"></div>
+    <div id="end-detail" class="rules"></div>
+    <button class="big" onclick="location.reload()">Scout again</button>
+  </div>
+</main>
+
+<div id="modal-bg">
+  <div id="modal">
+    <h2 id="m-name"></h2>
+    <div class="cat" id="m-cat"></div>
+    <div class="desc" id="m-desc"></div>
+    <div class="ask" id="m-ask"></div>
+    <div id="m-offers"></div>
+  </div>
+</div>
+<footer>Nekomachi and all studios, characters and catalogs are fictional. Built with vanilla HTML/CSS/JS.</footer>
+
+<script>
+const SIZE = 8, DAYS = 16;
+const OWNERS = [
+  { name:"Pixel Tanuki Games", emoji:"🦝", cat:"Retro game library", desc:"A two-person studio holding the rights to a beloved 90s handheld series. US retro merch and re-releases are wide open.", ask:8, value:900 },
+  { name:"Mogu Mogu Friends", emoji:"🐹", cat:"Character cafe mascots", desc:"Five round mascots from a neighborhood cafe, huge with local kids, never licensed abroad.", ask:10, value:1200 },
+  { name:"Showa Robo Works", emoji:"🤖", cat:"Tin toy designs", desc:"Third-generation tin toy maker. The original 60s robot designs are collector catnip.", ask:6, value:700 },
+  { name:"Kasa Pop", emoji:"☂️", cat:"Umbrella character", desc:"A cheerful umbrella character seen on every corner in the rain. Zero apparel licensees anywhere.", ask:12, value:1500 },
+  { name:"Neon Udon Studio", emoji:"🍜", cat:"Short anime clips", desc:"A micro-studio whose 15-second noodle anime loops get millions of organic views.", ask:9, value:1000 },
+  { name:"Kibi Dango Records", emoji:"🍡", cat:"City-pop catalog", desc:"A family label with 40 city-pop masters from the 80s. Sync agents keep circling.", ask:7, value:800 }
+];
+const EMPTY_TILES = ["🏪","☕","🚲","🏮","📻","🐈","🌂","🍙"];
+const HINTS = 3, DELAYS = 2;
+
+let grid = [], player = {x:0,y:0}, rival = {x:SIZE-1,y:SIZE-1};
+let day = 1, myScore = 0, rivalScore = 0, modalOpen = false, gameOver = false;
+let rivalFrozen = 0;
+
+function idx(x,y){ return y*SIZE+x; }
+
+function setup(){
+  grid = new Array(SIZE*SIZE).fill(null).map(()=>({type:"empty", revealed:false, claimed:null}));
+  const spots = [];
+  for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++){
+    if((x===0&&y===0)||(x===SIZE-1&&y===SIZE-1)) continue;
+    spots.push({x,y});
+  }
+  shuffle(spots);
+  OWNERS.forEach((o,i)=>{ const s=spots.pop(); grid[idx(s.x,s.y)] = {type:"owner", owner:o, revealed:false, claimed:null}; });
+  for(let i=0;i<HINTS;i++){ const s=spots.pop(); grid[idx(s.x,s.y)] = {type:"hint", revealed:false, claimed:null}; }
+  for(let i=0;i<DELAYS;i++){ const s=spots.pop(); grid[idx(s.x,s.y)] = {type:"delay", revealed:false, claimed:null}; }
+  grid[idx(0,0)].revealed = true;
+  grid[idx(SIZE-1,SIZE-1)].revealed = true;
+  day = 1; myScore = 0; rivalScore = 0; gameOver = false; rivalFrozen = 0;
+  player = {x:0,y:0}; rival = {x:SIZE-1,y:SIZE-1};
+}
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function log(msg){
+  const el = document.getElementById("log");
+  const d = document.createElement("div");
+  d.textContent = msg;
+  el.prepend(d);
+}
+
+function tileEmoji(c){
+  if(!c.revealed) return "·";
+  if(c.type === "owner"){
+    if(c.claimed === "me") return c.owner.emoji;
+    if(c.claimed === "rival") return c.owner.emoji;
+    if(c.claimed === "walked") return "🚶";
+    return c.owner.emoji;
+  }
+  if(c.type === "hint") return "💡";
+  if(c.type === "delay") return "🌧️";
+  return EMPTY_TILES[(c.x*13+c.y*7) % EMPTY_TILES.length];
+}
+
+function render(){
+  const g = document.getElementById("grid");
+  g.innerHTML = "";
+  for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++){
+    const c = grid[idx(x,y)]; c.x = x; c.y = y;
+    const t = document.createElement("div");
+    t.className = "tile" + (c.revealed ? "" : " hidden");
+    t.textContent = tileEmoji(c);
+    if(x === player.x && y === player.y){ t.classList.add("you"); }
+    if(x === rival.x && y === rival.y){ t.classList.add("rival-here"); }
+    if(c.type === "owner" && c.revealed && c.claimed === "me"){
+      const m = document.createElement("span"); m.className = "mark"; m.textContent = "✅"; t.appendChild(m);
+    }
+    if(c.type === "owner" && c.revealed && c.claimed === "rival"){
+      const m = document.createElement("span"); m.className = "mark"; m.textContent = "❌"; t.appendChild(m);
+    }
+    const reachable = !gameOver && !modalOpen && Math.abs(x-player.x)+Math.abs(y-player.y) === 1;
+    if(reachable){
+      t.classList.add("reach");
+      t.addEventListener("click", ()=>movePlayer(x,y));
+    }
+    g.appendChild(t);
+  }
+  document.getElementById("day").textContent = day;
+  document.getElementById("my-score").textContent = myScore;
+  document.getElementById("rival-score").textContent = rivalScore;
+}
+
+function movePlayer(x,y){
+  if(modalOpen || gameOver) return;
+  player = {x,y};
+  const c = grid[idx(x,y)];
+  c.revealed = true;
+  if(c.type === "owner" && !c.claimed){
+    render();
+    openOwner(c);
+    return; // day advances after the negotiation resolves
+  }
+  if(c.type === "hint"){
+    const target = nearestOwner(player);
+    if(target){
+      const dx = target.x - x, dy = target.y - y;
+      const dir = Math.abs(dx) > Math.abs(dy) ? (dx>0?"east":"west") : (dy>0?"south":"north");
+      log("💡 A record-store clerk tips you off: something interesting lies "+dir+".");
+    } else {
+      log("💡 The clerk shrugs. Every owner in town has already been signed.");
+    }
+  }
+  if(c.type === "delay"){
+    rivalFrozen = 1;
+    log("🌧️ A sudden rainstorm. The rival scout is stuck under an awning and loses a day.");
+  }
+  if(c.type === "empty") log("Day "+day+": quiet block. Keep walking.");
+  endTurn();
+}
+
+function nearestOwner(from){
+  let best = null, bd = 1e9;
+  for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++){
+    const c = grid[idx(x,y)];
+    if(c.type === "owner" && !c.claimed){
+      const d = Math.abs(x-from.x)+Math.abs(y-from.y);
+      if(d < bd){ bd = d; best = {x,y}; }
+    }
+  }
+  return best;
+}
+
+function openOwner(c){
+  modalOpen = true;
+  const o = c.owner;
+  document.getElementById("m-name").textContent = o.emoji+" "+o.name;
+  document.getElementById("m-cat").textContent = o.cat;
+  document.getElementById("m-desc").textContent = o.desc;
+  document.getElementById("m-ask").textContent = "They will not go below a "+o.ask+"% royalty. Estimated catalog value: "+o.value+" pts.";
+  const offers = [
+    { label:"Lowball", pct:o.ask-2, chance:0.35, blurb:(o.ask-2)+"% royalty. Cheap if it lands, insulting if it does not." },
+    { label:"Fair", pct:o.ask, chance:0.8, blurb:o.ask+"% royalty. Meets their floor. Usually enough." },
+    { label:"Generous", pct:o.ask+3, chance:1.0, blurb:(o.ask+3)+"% royalty. They sign on the spot, but your margin thins." }
+  ];
+  const wrap = document.getElementById("m-offers");
+  wrap.innerHTML = "";
+  offers.forEach(of=>{
+    const b = document.createElement("button");
+    b.className = "offer-btn";
+    b.innerHTML = "<b>"+of.label+"</b> \u2014 "+of.blurb;
+    b.addEventListener("click", ()=>makeOffer(c, of));
+    wrap.appendChild(b);
+  });
+  document.getElementById("modal-bg").classList.add("show");
+}
+
+function makeOffer(c, of){
+  const o = c.owner;
+  const signed = Math.random() < of.chance;
+  document.getElementById("modal-bg").classList.remove("show");
+  modalOpen = false;
+  if(signed){
+    const net = Math.max(50, o.value - of.pct*50);
+    c.claimed = "me";
+    myScore += net;
+    log("✍️ "+o.name+" signs with you at "+of.pct+"%. Catalog +"+net+" pts.");
+  } else {
+    c.claimed = "walked";
+    log("🚶 "+o.name+" walks. \u201CWe know what we are worth.\u201D Nobody gets them now.");
+  }
+  endTurn();
+}
+
+function rivalMove(){
+  if(rivalFrozen > 0){ rivalFrozen--; return; }
+  const target = nearestOwner(rival);
+  if(!target) return;
+  let nx = rival.x, ny = rival.y;
+  if(target.x !== rival.x) nx += Math.sign(target.x - rival.x);
+  else ny += Math.sign(target.y - rival.y);
+  rival = {x:nx, y:ny};
+  const c = grid[idx(nx,ny)];
+  c.revealed = true;
+  if(c.type === "owner" && !c.claimed){
+    c.claimed = "rival";
+    const net = Math.max(50, c.owner.value - c.owner.ask*50);
+    rivalScore += net;
+    log("❌ The rival signs "+c.owner.name+" at "+c.owner.ask+"%. +"+net+" pts for them.");
+  }
+}
+
+function ownersLeft(){
+  return grid.some(c=>c.type==="owner" && !c.claimed);
+}
+
+function endTurn(){
+  rivalMove();
+  render();
+  if(day >= DAYS || !ownersLeft()){
+    endGame();
+    return;
+  }
+  day++;
+  render();
+}
+
+function endGame(){
+  gameOver = true;
+  document.getElementById("game-screen").style.display = "none";
+  const es = document.getElementById("end-screen");
+  es.style.display = "block";
+  let rank;
+  if(myScore > rivalScore && myScore >= 2000) rank = "🏆 King of Nekomachi";
+  else if(myScore > rivalScore) rank = "🥇 Lead Scout";
+  else if(myScore === rivalScore) rank = "🤝 Split Decision";
+  else rank = "🥈 Out-scouted";
+  document.getElementById("rank").textContent = rank;
+  document.getElementById("end-detail").innerHTML =
+    "<p>Your catalog: <b style='color:#ffd166'>"+myScore+"</b> pts. Rival: <b style='color:#ff4d6d'>"+rivalScore+"</b> pts.</p>" +
+    "<p style='margin-top:8px'>The small owners were always there. The ones who walk the streets find them first.</p>";
+  log("Game over: you "+myScore+" vs rival "+rivalScore+".");
+}
+
+document.getElementById("start-btn").addEventListener("click", ()=>{
+  document.getElementById("start-screen").style.display = "none";
+  document.getElementById("game-screen").style.display = "block";
+  setup();
+  log("Day 1: you step out of Nekomachi station. Six owners are out there.");
+  render();
+});
+</script>
+</body>
+</html>
